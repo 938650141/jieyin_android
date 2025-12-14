@@ -144,12 +144,17 @@ class MainActivity : AppCompatActivity() {
     private fun hasFailureToday(): Boolean {
         val records = storage.getAllRecords()
         val today = Calendar.getInstance()
+        val todayYear = today.get(Calendar.YEAR)
+        val todayDay = today.get(Calendar.DAY_OF_YEAR)
+        
+        // Reuse a single Calendar instance for checking each failure
+        val recordCal = Calendar.getInstance()
         
         return records.any { record ->
             if (record.type != ActivityType.FAILURE) return@any false
-            val recordCal = Calendar.getInstance().apply { timeInMillis = record.timestamp }
-            today.get(Calendar.YEAR) == recordCal.get(Calendar.YEAR) &&
-            today.get(Calendar.DAY_OF_YEAR) == recordCal.get(Calendar.DAY_OF_YEAR)
+            recordCal.timeInMillis = record.timestamp
+            todayYear == recordCal.get(Calendar.YEAR) &&
+            todayDay == recordCal.get(Calendar.DAY_OF_YEAR)
         }
     }
     

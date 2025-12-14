@@ -28,6 +28,9 @@ class AddictionScoreCalculator {
         private const val MAX_DAILY_ADDITION = 0.5  // Maximum points added per day
         private const val MAX_DAILY_DEDUCTION = 0.5  // Maximum points deducted per day
         
+        // Time constants
+        private const val MILLIS_PER_HOUR = 1000L * 60 * 60
+        
         // Time interval scoring (for Success) - 按小时 * 0.01
         private const val SUCCESS_POINTS_PER_HOUR = 0.01
         
@@ -163,7 +166,7 @@ class AddictionScoreCalculator {
         }
         
         val intervalMillis = currentTime - lastTime
-        val intervalHours = (intervalMillis / (1000.0 * 60 * 60)).toLong()  // 不满一小时部分不计入
+        val intervalHours = (intervalMillis / MILLIS_PER_HOUR)  // 不满一小时部分不计入
         
         // Award points based on hours of abstinence
         val points = min(intervalHours * SUCCESS_POINTS_PER_HOUR, MAX_DAILY_ADDITION)
@@ -178,7 +181,7 @@ class AddictionScoreCalculator {
         var penalty = FAILURE_BASE_PENALTY
         
         // 最近7天内的失败次数
-        val windowMillis = FAILURE_RECENT_WINDOW_DAYS * 24 * 60 * 60 * 1000L
+        val windowMillis = FAILURE_RECENT_WINDOW_DAYS * 24 * MILLIS_PER_HOUR
         val recentFailures = allFailures.filter { currentTime - it <= windowMillis }
         
         // 根据最近失败次数增加扣分
@@ -189,8 +192,9 @@ class AddictionScoreCalculator {
         // 上次失败距离越近扣分越多
         val otherFailures = allFailures.filter { it < currentTime }
         if (otherFailures.isNotEmpty()) {
-            val lastFailure = otherFailures.maxOrNull()!!
-            val hoursSinceLastFailure = (currentTime - lastFailure) / (1000.0 * 60 * 60)
+            // Safe to use max() since we checked isNotEmpty()
+            val lastFailure = otherFailures.max()
+            val hoursSinceLastFailure = (currentTime - lastFailure).toDouble() / MILLIS_PER_HOUR
             
             // 如果距离上次失败不到24小时，额外扣分
             if (hoursSinceLastFailure < 24) {

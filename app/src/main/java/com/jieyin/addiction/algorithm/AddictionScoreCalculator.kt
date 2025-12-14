@@ -32,7 +32,6 @@ class AddictionScoreCalculator {
         // Time interval scoring (for Success)
         private const val HOURS_PER_DAY = 24.0
         private const val SUCCESS_POINTS_PER_DAY = 0.05  // 0.05 points per day of abstinence
-        private const val SUCCESS_MAX_POINTS = 0.5  // Maximum 0.5 points per success
         
         // Failure scoring
         private const val FAILURE_BASE_PENALTY = 0.10  // Base penalty 0.10
@@ -121,7 +120,7 @@ class AddictionScoreCalculator {
         val intervalDays = intervalMillis / (1000.0 * 60 * 60 * HOURS_PER_DAY)
         
         // Award points based on days of abstinence, capped at max daily addition
-        val points = min(intervalDays * SUCCESS_POINTS_PER_DAY, SUCCESS_MAX_POINTS)
+        val points = min(intervalDays * SUCCESS_POINTS_PER_DAY, MAX_DAILY_ADDITION)
         return points
     }
     

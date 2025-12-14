@@ -16,6 +16,8 @@ class ActivityStorage(context: Context) {
     companion object {
         private const val PREFS_NAME = "jieyin_records"
         private const val KEY_RECORDS = "activity_records"
+        private const val MILLIS_PER_HOUR = 1000L * 60 * 60
+        private const val ONE_WEEK_HOURS = 7 * 24
     }
     
     /**
@@ -39,7 +41,7 @@ class ActivityStorage(context: Context) {
     /**
      * Save all records (overwrite)
      */
-    private fun saveAllRecords(records: List<ActivityRecord>) {
+    fun saveAllRecords(records: List<ActivityRecord>) {
         val json = gson.toJson(records)
         sharedPreferences.edit().putString(KEY_RECORDS, json).apply()
     }
@@ -58,5 +60,26 @@ class ActivityStorage(context: Context) {
         val records = getAllRecords().toMutableList()
         records.removeAll { it.id == recordId }
         saveAllRecords(records)
+    }
+    
+    /**
+     * Update a specific record
+     */
+    fun updateRecord(recordId: Long, updatedRecord: ActivityRecord) {
+        val records = getAllRecords().toMutableList()
+        val index = records.indexOfFirst { it.id == recordId }
+        if (index != -1) {
+            records[index] = updatedRecord.copy(id = recordId)
+            saveAllRecords(records)
+        }
+    }
+    
+    /**
+     * Check if record can be modified (within 7 days)
+     */
+    fun canModifyRecord(recordId: Long): Boolean {
+        val record = getAllRecords().find { it.id == recordId } ?: return false
+        val oneWeekMillis = ONE_WEEK_HOURS * MILLIS_PER_HOUR
+        return System.currentTimeMillis() - record.timestamp <= oneWeekMillis
     }
 }

@@ -67,7 +67,9 @@ class AddictionScoreCalculator {
                 ActivityType.SUCCESS -> {
                     score += calculateSuccessPoints(record.timestamp, lastSuccessOrFailureTime)
                     lastSuccessOrFailureTime = record.timestamp
-                    // Reset failure tracking on success
+                    // Reset failure tracking on success to provide psychological fresh start
+                    // This encourages positive behavior and prevents past failures from
+                    // permanently weighing down the score
                     failureCount = 0
                     recentFailures.clear()
                 }

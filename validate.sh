@@ -62,13 +62,13 @@ else
     echo "✗ Failure penalty mechanism missing"
 fi
 
-if grep -q "READING_POINTS" app/src/main/java/com/jieyin/addiction/algorithm/AddictionScoreCalculator.kt; then
+if grep -q "READING_POINTS_PER_30MIN" app/src/main/java/com/jieyin/addiction/algorithm/AddictionScoreCalculator.kt; then
     echo "✓ Reading scoring mechanism exists"
 else
     echo "✗ Reading scoring mechanism missing"
 fi
 
-if grep -q "EXERCISE_POINTS" app/src/main/java/com/jieyin/addiction/algorithm/AddictionScoreCalculator.kt; then
+if grep -q "EXERCISE_POINTS_PER_30MIN" app/src/main/java/com/jieyin/addiction/algorithm/AddictionScoreCalculator.kt; then
     echo "✓ Exercise scoring mechanism exists"
 else
     echo "✗ Exercise scoring mechanism missing"

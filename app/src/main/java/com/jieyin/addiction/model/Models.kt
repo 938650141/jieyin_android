@@ -1,0 +1,34 @@
+package com.jieyin.addiction.model
+
+import java.util.Date
+
+/**
+ * Activity types for tracking
+ */
+enum class ActivityType {
+    SUCCESS,    // 成功
+    FAILURE,    // 失败
+    READING,    // 读书
+    EXERCISE,   // 运动
+    SLEEP       // 睡眠
+}
+
+/**
+ * Activity record
+ */
+data class ActivityRecord(
+    val id: Long = System.currentTimeMillis(),
+    val type: ActivityType,
+    val timestamp: Long = System.currentTimeMillis(),
+    val duration: Int = 0  // Duration in minutes (for Reading, Exercise, Sleep)
+)
+
+/**
+ * Score level ranges
+ */
+enum class ScoreLevel(val min: Double, val max: Double, val description: String) {
+    CRITICAL(0.0, 59.99, "严重成瘾"),
+    WARNING(60.0, 79.99, "中度成瘾"),
+    GOOD(80.0, 94.99, "轻度成瘾"),
+    EXCELLENT(95.0, 100.0, "已戒除")
+}

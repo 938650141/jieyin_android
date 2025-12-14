@@ -16,6 +16,8 @@ class ActivityStorage(context: Context) {
     companion object {
         private const val PREFS_NAME = "jieyin_records"
         private const val KEY_RECORDS = "activity_records"
+        private const val MILLIS_PER_HOUR = 1000L * 60 * 60
+        private const val ONE_WEEK_HOURS = 7 * 24
     }
     
     /**
@@ -77,7 +79,7 @@ class ActivityStorage(context: Context) {
      */
     fun canModifyRecord(recordId: Long): Boolean {
         val record = getAllRecords().find { it.id == recordId } ?: return false
-        val oneWeekMillis = 7 * 24 * 60 * 60 * 1000L
+        val oneWeekMillis = ONE_WEEK_HOURS * MILLIS_PER_HOUR
         return System.currentTimeMillis() - record.timestamp <= oneWeekMillis
     }
 }

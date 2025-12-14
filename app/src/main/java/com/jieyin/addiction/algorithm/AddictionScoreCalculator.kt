@@ -48,7 +48,8 @@ class AddictionScoreCalculator {
         private const val OPTIMAL_SLEEP_MIN = 7.0
         private const val OPTIMAL_SLEEP_MAX = 9.0
         private const val SLEEP_POINTS_OPTIMAL = 0.05  // 0.05 for optimal sleep
-        private const val SLEEP_PENALTY_PER_HOUR_OFF = 0.02  // 0.02 penalty per hour off
+        private const val SLEEP_PENALTY_PER_HOUR_UNDER = 0.02  // 0.02 penalty per hour under
+        private const val SLEEP_PENALTY_PER_HOUR_OVER = 0.01  // 0.01 penalty per hour over
     }
     
     /**
@@ -184,12 +185,12 @@ class AddictionScoreCalculator {
             hours < OPTIMAL_SLEEP_MIN -> {
                 // Too little sleep - penalty
                 val hoursOff = OPTIMAL_SLEEP_MIN - hours
-                -(hoursOff * SLEEP_PENALTY_PER_HOUR_OFF)
+                -(hoursOff * SLEEP_PENALTY_PER_HOUR_UNDER)
             }
             else -> {
-                // Too much sleep - small penalty
+                // Too much sleep - smaller penalty
                 val hoursOff = hours - OPTIMAL_SLEEP_MAX
-                -(hoursOff * SLEEP_PENALTY_PER_HOUR_OFF * 0.5)
+                -(hoursOff * SLEEP_PENALTY_PER_HOUR_OVER)
             }
         }
         

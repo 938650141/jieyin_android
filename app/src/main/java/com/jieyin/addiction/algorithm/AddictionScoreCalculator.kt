@@ -25,7 +25,7 @@ class AddictionScoreCalculator {
         private const val MAX_SCORE = 100.0
         
         // Scoring unit and daily limits
-        private const val SCORE_UNIT = 0.01  // All scoring in multiples of 0.01
+        private const val SCORE_UNIT = 0.01  // Design constraint: All scoring in multiples of 0.01 (not enforced programmatically)
         private const val MAX_DAILY_ADDITION = 0.5  // Maximum points added per day
         private const val MAX_DAILY_DEDUCTION = 0.5  // Maximum points deducted per day
         

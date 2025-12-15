@@ -222,4 +222,175 @@ class AddictionScoreCalculatorTest {
         val score = calculator.calculateScore(records)
         assertTrue("Mixed positive activities should increase score", score > 60.0)
     }
+    
+    // New tests for updated requirements
+    
+    @Test
+    fun testExerciseRecordableButZeroPointsAfterFailure() {
+        // Test that exercise can be recorded (score is 0) when there's a failure on the same day
+        val baseTime = System.currentTimeMillis()
+        val records = listOf(
+            ActivityRecord(type = ActivityType.FAILURE, timestamp = baseTime),
+            ActivityRecord(type = ActivityType.EXERCISE, duration = 30, timestamp = baseTime + 1000)
+        )
+        
+        val exerciseRecord = records[1]
+        val scoreChange = calculator.calculateScoreChange(exerciseRecord, listOf(records[0]))
+        
+        // Exercise should have 0 score change due to same-day failure
+        assertEquals("Exercise score should be 0 when failure exists on same day", 0.0, scoreChange, 0.01)
+    }
+    
+    @Test
+    fun testSleepRecordableButZeroPointsAfterFailure() {
+        // Test that sleep can be recorded (score is 0) when there's a failure on the same day
+        val baseTime = System.currentTimeMillis()
+        val records = listOf(
+            ActivityRecord(type = ActivityType.FAILURE, timestamp = baseTime),
+            ActivityRecord(type = ActivityType.SLEEP, duration = 80, timestamp = baseTime + 1000) // positive sleep score
+        )
+        
+        val sleepRecord = records[1]
+        val scoreChange = calculator.calculateScoreChange(sleepRecord, listOf(records[0]))
+        
+        // Sleep addition should have 0 score change due to same-day failure
+        assertEquals("Sleep addition should be 0 when failure exists on same day", 0.0, scoreChange, 0.01)
+    }
+    
+    @Test
+    fun testFailureOffsetsExerciseOnSameDay() {
+        // Test that when failure occurs, it offsets exercise scores from the same day
+        val baseTime = System.currentTimeMillis()
+        
+        // First scenario: Exercise first, then failure
+        val exerciseFirst = listOf(
+            ActivityRecord(type = ActivityType.EXERCISE, duration = 30, timestamp = baseTime),
+            ActivityRecord(type = ActivityType.FAILURE, timestamp = baseTime + 1000)
+        )
+        
+        // The failure should offset the exercise points (+0.1)
+        val failureRecord = exerciseFirst[1]
+        val scoreChange = calculator.calculateScoreChange(failureRecord, listOf(exerciseFirst[0]))
+        
+        // Score change should include the exercise offset (0.1) in addition to base penalty
+        assertTrue("Failure should offset exercise points", scoreChange < -0.1)
+    }
+    
+    @Test
+    fun testFailureOffsetsSleepOnSameDay() {
+        // Test that when failure occurs, it offsets positive sleep scores from the same day
+        val baseTime = System.currentTimeMillis()
+        
+        // Sleep first, then failure
+        val sleepFirst = listOf(
+            ActivityRecord(type = ActivityType.SLEEP, duration = 80, timestamp = baseTime), // +0.2 points
+            ActivityRecord(type = ActivityType.FAILURE, timestamp = baseTime + 1000)
+        )
+        
+        // The failure should offset the sleep points (+0.2)
+        val failureRecord = sleepFirst[1]
+        val scoreChange = calculator.calculateScoreChange(failureRecord, listOf(sleepFirst[0]))
+        
+        // Score change should include the sleep offset (0.2) in addition to base penalty
+        assertTrue("Failure should offset sleep points", scoreChange < -0.1)
+    }
+    
+    @Test
+    fun testFailureDoesNotOffsetNegativeSleep() {
+        // Test that failure does not offset negative sleep scores (deductions)
+        val baseTime = System.currentTimeMillis()
+        
+        // Negative sleep first, then failure
+        val negativeSleepFirst = listOf(
+            ActivityRecord(type = ActivityType.SLEEP, duration = 40, timestamp = baseTime), // -0.2 points
+            ActivityRecord(type = ActivityType.FAILURE, timestamp = baseTime + 1000)
+        )
+        
+        // Only failure
+        val failureOnly = listOf(
+            ActivityRecord(type = ActivityType.FAILURE, timestamp = baseTime + 1000)
+        )
+        
+        val scoreWithNegativeSleep = calculator.calculateScore(negativeSleepFirst)
+        val scoreFailureOnly = calculator.calculateScore(failureOnly)
+        
+        // Score with negative sleep should be lower (both deductions apply)
+        assertTrue("Negative sleep should not be offset by failure", scoreWithNegativeSleep < scoreFailureOnly)
+    }
+    
+    @Test
+    fun testExponentialFailurePenaltyGrowth() {
+        // Test that failure penalty grows exponentially with more failures in 30-day window
+        val baseTime = System.currentTimeMillis()
+        val oneDayMs = 24 * 60 * 60 * 1000L
+        
+        // 1 failure
+        val oneFailure = listOf(
+            ActivityRecord(type = ActivityType.FAILURE, timestamp = baseTime)
+        )
+        
+        // 3 failures in 30 days
+        val threeFailures = listOf(
+            ActivityRecord(type = ActivityType.FAILURE, timestamp = baseTime - 10 * oneDayMs),
+            ActivityRecord(type = ActivityType.FAILURE, timestamp = baseTime - 5 * oneDayMs),
+            ActivityRecord(type = ActivityType.FAILURE, timestamp = baseTime)
+        )
+        
+        val scoreOne = calculator.calculateScore(oneFailure)
+        val scoreThree = calculator.calculateScore(threeFailures)
+        
+        // The third failure in threeFailures should have much higher penalty due to exponential growth
+        val penaltyOne = 60.0 - scoreOne
+        val penaltyThree = 60.0 - scoreThree
+        
+        // Total penalty for three failures should be much more than 3x single failure penalty
+        assertTrue("Exponential growth should make multiple failures much worse", penaltyThree > penaltyOne * 3)
+    }
+    
+    @Test
+    fun testFailurePenaltyCappedAt3Points() {
+        // Test that failure penalty is capped at 3 points maximum
+        val baseTime = System.currentTimeMillis()
+        val oneHourMs = 60 * 60 * 1000L
+        
+        // Many failures very close together
+        val manyCloseFailures = (0 until 10).map {
+            ActivityRecord(type = ActivityType.FAILURE, timestamp = baseTime + it * oneHourMs)
+        }
+        
+        // Calculate score change for the last failure
+        val lastFailure = manyCloseFailures.last()
+        val previousFailures = manyCloseFailures.dropLast(1)
+        val scoreChange = calculator.calculateScoreChange(lastFailure, previousFailures)
+        
+        // Score change should be capped at -3.0
+        assertTrue("Failure penalty should be capped at 3 points", scoreChange >= -3.0)
+    }
+    
+    @Test
+    fun testThirtyDayWindowForFailures() {
+        // Test that failures from more than 30 days ago don't affect current penalty
+        val baseTime = System.currentTimeMillis()
+        val oneDayMs = 24 * 60 * 60 * 1000L
+        
+        // Failure from 35 days ago + current failure
+        val oldFailure = listOf(
+            ActivityRecord(type = ActivityType.FAILURE, timestamp = baseTime - 35 * oneDayMs),
+            ActivityRecord(type = ActivityType.FAILURE, timestamp = baseTime)
+        )
+        
+        // Just current failure
+        val currentFailure = listOf(
+            ActivityRecord(type = ActivityType.FAILURE, timestamp = baseTime)
+        )
+        
+        // Get score change for current failure in both scenarios
+        val scoreChangeWithOld = calculator.calculateScoreChange(oldFailure[1], listOf(oldFailure[0]))
+        val scoreChangeAlone = calculator.calculateScoreChange(currentFailure[0], emptyList())
+        
+        // Old failure (35 days ago) should have minimal impact on current failure penalty
+        // The difference should be small since old failure is outside 30-day window
+        val difference = kotlin.math.abs(scoreChangeWithOld - scoreChangeAlone)
+        assertTrue("Failures older than 30 days should have minimal impact", difference < 0.5)
+    }
 }

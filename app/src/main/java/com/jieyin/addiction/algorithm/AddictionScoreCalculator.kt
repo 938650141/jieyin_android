@@ -3,6 +3,7 @@ package com.jieyin.addiction.algorithm
 import com.jieyin.addiction.model.ActivityRecord
 import com.jieyin.addiction.model.ActivityType
 import com.jieyin.addiction.model.ScoreLevel
+import kotlin.math.exp
 import kotlin.math.max
 import kotlin.math.min
 import java.util.Calendar
@@ -13,9 +14,13 @@ import java.util.Calendar
  * Rules:
  * - Base score: 60
  * - Success: Add points based on time interval from last success/failure (hours * 0.01)
- * - Failure: Deduct points based on failure frequency and recency
- * - Exercise: Add 0.1 points if exercised over 30 minutes (only if no failure today)
+ * - Failure: Deduct points based on failure frequency and recency (exponential growth)
+ *   - When recording failure, exercise/sleep scores from the same day are offset (added to deduction)
+ *   - Failure records from the past 30 days affect current deduction
+ *   - Maximum deduction: 3 points
+ * - Exercise: Add 0.1 points if exercised over 30 minutes (0 points if failure on same day)
  * - Sleep: Add/deduct points based on sleep score ((score - 60) * 0.01), deduction ignores failure
+ *   - If there's a failure on same day, sleep addition is 0
  */
 class AddictionScoreCalculator {
     
@@ -26,7 +31,8 @@ class AddictionScoreCalculator {
         
         // Scoring unit and daily limits
         private const val MAX_DAILY_ADDITION = 0.5  // Maximum points added per day
-        private const val MAX_DAILY_DEDUCTION = 0.5  // Maximum points deducted per day
+        private const val MAX_DAILY_DEDUCTION = 0.5  // Maximum points deducted per day (for sleep)
+        private const val MAX_FAILURE_DEDUCTION = 3.0  // Maximum points deducted per failure (adjusted from 0.5)
         
         // Time constants
         private const val MILLIS_PER_HOUR = 1000L * 60 * 60
@@ -34,9 +40,9 @@ class AddictionScoreCalculator {
         // Time interval scoring (for Success) - 按小时 * 0.01
         private const val SUCCESS_POINTS_PER_HOUR = 0.01
         
-        // Failure scoring
+        // Failure scoring - exponential growth
         private const val FAILURE_BASE_PENALTY = 0.10  // Base penalty 0.10
-        private const val FAILURE_RECENT_WINDOW_DAYS = 7  // Recent window in days
+        private const val FAILURE_RECENT_WINDOW_DAYS = 30  // Recent window in days (one month)
         
         // Exercise scoring - 超过30分钟就加0.1分
         private const val EXERCISE_POINTS = 0.1
@@ -62,6 +68,8 @@ class AddictionScoreCalculator {
         // Process each record and calculate score changes
         var lastSuccessOrFailureTime: Long? = null
         val allFailures = mutableListOf<Long>()
+        // Track exercise and sleep records with their scores for offset calculation
+        val exerciseAndSleepRecords = mutableListOf<ActivityRecord>()
         
         for (record in sortedRecords) {
             when (record.type) {
@@ -73,16 +81,23 @@ class AddictionScoreCalculator {
                 
                 ActivityType.FAILURE -> {
                     allFailures.add(record.timestamp)
-                    val penalty = calculateFailurePenalty(record.timestamp, allFailures)
+                    // Calculate exercise/sleep offset from same day
+                    val sameDayOffset = calculateSameDayExerciseSleepOffset(record.timestamp, exerciseAndSleepRecords)
+                    val penalty = calculateFailurePenalty(record.timestamp, allFailures, sameDayOffset)
                     score -= penalty
                     lastSuccessOrFailureTime = record.timestamp
                 }
                 
                 ActivityType.EXERCISE -> {
-                    // 运动只能在当天没有失败的情况下进行加分
-                    if (!hasFailureOnSameDay(record.timestamp, allFailures)) {
-                        score += calculateExercisePoints()
+                    // 运动可以记录，但当天有失败则加分为0
+                    val exercisePoints = if (!hasFailureOnSameDay(record.timestamp, allFailures)) {
+                        calculateExercisePoints()
+                    } else {
+                        0.0
                     }
+                    score += exercisePoints
+                    // Track the exercise record (store actual potential points, not the applied 0)
+                    exerciseAndSleepRecords.add(record)
                 }
                 
                 ActivityType.SLEEP -> {
@@ -91,9 +106,11 @@ class AddictionScoreCalculator {
                     if (sleepPoints < 0) {
                         score += sleepPoints
                     } else if (!hasFailureOnSameDay(record.timestamp, allFailures)) {
-                        // 加分时需要当天没有失败
+                        // 加分时需要当天没有失败（可以记录但加分为0）
                         score += sleepPoints
                     }
+                    // Track the sleep record
+                    exerciseAndSleepRecords.add(record)
                 }
             }
         }
@@ -103,11 +120,52 @@ class AddictionScoreCalculator {
     }
     
     /**
+     * Calculate the offset for failure deduction from same-day exercise and sleep records
+     * This is used to offset any gains from exercise/sleep on the same day as a failure
+     */
+    private fun calculateSameDayExerciseSleepOffset(failureTime: Long, exerciseAndSleepRecords: List<ActivityRecord>): Double {
+        var offset = 0.0
+        
+        for (record in exerciseAndSleepRecords) {
+            if (isSameDay(failureTime, record.timestamp)) {
+                when (record.type) {
+                    ActivityType.EXERCISE -> {
+                        offset += EXERCISE_POINTS
+                    }
+                    ActivityType.SLEEP -> {
+                        val sleepPoints = calculateSleepPoints(record.duration)
+                        // Only offset positive sleep points (gains)
+                        if (sleepPoints > 0) {
+                            offset += sleepPoints
+                        }
+                    }
+                    else -> {}
+                }
+            }
+        }
+        
+        return offset
+    }
+    
+    /**
+     * Check if two timestamps are on the same day
+     */
+    private fun isSameDay(timestamp1: Long, timestamp2: Long): Boolean {
+        val cal1 = Calendar.getInstance().apply { timeInMillis = timestamp1 }
+        val cal2 = Calendar.getInstance().apply { timeInMillis = timestamp2 }
+        return cal1.get(Calendar.YEAR) == cal2.get(Calendar.YEAR) &&
+               cal1.get(Calendar.DAY_OF_YEAR) == cal2.get(Calendar.DAY_OF_YEAR)
+    }
+    
+    /**
      * Calculate score change for a specific record
      */
     fun calculateScoreChange(record: ActivityRecord, allRecords: List<ActivityRecord>): Double {
         val previousRecords = allRecords.filter { it.timestamp < record.timestamp }.sortedBy { it.timestamp }
         val allFailures = previousRecords.filter { it.type == ActivityType.FAILURE }.map { it.timestamp }.toMutableList()
+        val exerciseAndSleepRecords = previousRecords.filter { 
+            it.type == ActivityType.EXERCISE || it.type == ActivityType.SLEEP 
+        }
         
         return when (record.type) {
             ActivityType.SUCCESS -> {
@@ -119,10 +177,13 @@ class AddictionScoreCalculator {
             
             ActivityType.FAILURE -> {
                 allFailures.add(record.timestamp)
-                -calculateFailurePenalty(record.timestamp, allFailures)
+                // Calculate exercise/sleep offset from same day
+                val sameDayOffset = calculateSameDayExerciseSleepOffset(record.timestamp, exerciseAndSleepRecords)
+                -calculateFailurePenalty(record.timestamp, allFailures, sameDayOffset)
             }
             
             ActivityType.EXERCISE -> {
+                // 运动可以记录，但当天有失败则加分为0
                 if (!hasFailureOnSameDay(record.timestamp, allFailures)) {
                     calculateExercisePoints()
                 } else {
@@ -137,6 +198,7 @@ class AddictionScoreCalculator {
                 } else if (!hasFailureOnSameDay(record.timestamp, allFailures)) {
                     sleepPoints
                 } else {
+                    // 当天有失败，可以记录但加分为0
                     0.0
                 }
             }
@@ -175,37 +237,45 @@ class AddictionScoreCalculator {
     
     /**
      * Calculate penalty for a failure event
-     * 基础扣分0.1，上次失败距离越近扣分越多，从现在开始过去的一段时间内失败次数越多扣分越多
+     * Uses exponential growth based on:
+     * - Time since last failure (shorter interval = higher penalty)
+     * - Number of failures in the past 30 days (more failures = higher penalty)
+     * Also includes same-day exercise/sleep offset to cancel out those gains
      */
-    private fun calculateFailurePenalty(currentTime: Long, allFailures: List<Long>): Double {
+    private fun calculateFailurePenalty(currentTime: Long, allFailures: List<Long>, sameDayOffset: Double = 0.0): Double {
         var penalty = FAILURE_BASE_PENALTY
         
-        // 最近7天内的失败次数
+        // 最近30天内的失败次数
         val windowMillis = FAILURE_RECENT_WINDOW_DAYS * 24 * MILLIS_PER_HOUR
         val recentFailures = allFailures.filter { currentTime - it <= windowMillis }
+        val failureCount = recentFailures.size
         
-        // 根据最近失败次数增加扣分
-        if (recentFailures.size > 1) {
-            penalty += (recentFailures.size - 1) * 0.02
+        // Exponential penalty based on failure count in 30-day window
+        // Formula: base * (1.5 ^ (count - 1)) for each additional failure
+        if (failureCount > 1) {
+            val exponentialFactor = Math.pow(1.5, (failureCount - 1).toDouble())
+            penalty = FAILURE_BASE_PENALTY * exponentialFactor
         }
         
-        // 上次失败距离越近扣分越多
+        // 上次失败距离越近扣分越多 (exponential based on time proximity)
         val otherFailures = allFailures.filter { it < currentTime }
         if (otherFailures.isNotEmpty()) {
-            // Safe to use max() since we checked isNotEmpty()
             val lastFailure = otherFailures.max()
             val hoursSinceLastFailure = (currentTime - lastFailure).toDouble() / MILLIS_PER_HOUR
             
-            // 如果距离上次失败不到24小时，额外扣分
-            if (hoursSinceLastFailure < 24) {
-                penalty += 0.05
-            } else if (hoursSinceLastFailure < 72) {
-                penalty += 0.03
+            // Exponential time-based penalty: the closer the last failure, the higher the multiplier
+            // Uses decay function: penalty multiplier = e^(-hours/24) gives higher multiplier for recent failures
+            if (hoursSinceLastFailure < 24 * 7) { // Within 7 days
+                val timeMultiplier = 1.0 + exp(-hoursSinceLastFailure / 24.0) // Ranges from ~2 (immediate) to ~1 (7 days)
+                penalty *= timeMultiplier
             }
         }
         
-        // Cap total penalty at max daily deduction
-        return min(penalty, MAX_DAILY_DEDUCTION)
+        // Add same-day exercise/sleep offset to cancel out those gains
+        penalty += sameDayOffset
+        
+        // Cap total penalty at max failure deduction (3 points)
+        return min(penalty, MAX_FAILURE_DEDUCTION)
     }
     
     /**

@@ -74,17 +74,19 @@ class MainActivity : AppCompatActivity() {
     
     /**
      * 运动确认对话框 - 确认是否运动超过30分钟
+     * 当天有失败记录时仍可记录，但加分为0
      */
     private fun showExerciseConfirmDialog() {
-        // 检查当天是否有失败记录
-        if (hasFailureToday()) {
-            Toast.makeText(this, "今日已有失败记录，运动不能加分", Toast.LENGTH_SHORT).show()
-            return
+        val hasFailure = hasFailureToday()
+        val message = if (hasFailure) {
+            "今日运动是否超过30分钟？\n\n注意：今日已有失败记录，运动得分将为0"
+        } else {
+            "今日运动是否超过30分钟？"
         }
         
         AlertDialog.Builder(this)
             .setTitle("确认运动")
-            .setMessage("今日运动是否超过30分钟？")
+            .setMessage(message)
             .setPositiveButton("是") { _, _ ->
                 val record = ActivityRecord(type = ActivityType.EXERCISE, duration = 30)
                 val allRecords = storage.getAllRecords()
@@ -99,6 +101,7 @@ class MainActivity : AppCompatActivity() {
     
     /**
      * 睡眠得分输入对话框 - 输入百分制得分
+     * 当天有失败记录时仍可记录加分类型的睡眠，但加分为0
      */
     private fun showSleepScoreDialog() {
         val dialogView = LayoutInflater.from(this).inflate(R.layout.dialog_duration, null)
@@ -114,20 +117,17 @@ class MainActivity : AppCompatActivity() {
                 if (scoreStr.isNotEmpty()) {
                     val sleepScore = scoreStr.toIntOrNull() ?: 0
                     if (sleepScore in 0..100) {
-                        // 检查是否是扣分
-                        val isDeduction = sleepScore < 60
-                        
-                        // 扣分无视当天失败，但加分时如果当天有失败则不能加分
-                        if (!isDeduction && hasFailureToday()) {
-                            Toast.makeText(this, "今日已有失败记录，睡眠不能加分", Toast.LENGTH_SHORT).show()
-                            return@setPositiveButton
-                        }
-                        
                         val record = ActivityRecord(type = ActivityType.SLEEP, duration = sleepScore)
                         val allRecords = storage.getAllRecords()
                         val scoreChange = calculator.calculateScoreChange(record, allRecords)
                         val recordWithScore = record.copy(scoreChange = scoreChange)
                         storage.saveRecord(recordWithScore)
+                        
+                        // Show message if score is 0 due to same-day failure
+                        if (scoreChange == 0.0 && sleepScore > 60) {
+                            Toast.makeText(this, "今日已有失败记录，睡眠得分为0", Toast.LENGTH_SHORT).show()
+                        }
+                        
                         updateDisplay()
                     } else {
                         Toast.makeText(this, "请输入0-100之间的得分", Toast.LENGTH_SHORT).show()

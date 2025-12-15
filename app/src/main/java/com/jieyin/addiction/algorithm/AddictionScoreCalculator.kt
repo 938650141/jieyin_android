@@ -6,6 +6,7 @@ import com.jieyin.addiction.model.ScoreLevel
 import kotlin.math.exp
 import kotlin.math.max
 import kotlin.math.min
+import kotlin.math.pow
 import java.util.Calendar
 
 /**
@@ -253,7 +254,7 @@ class AddictionScoreCalculator {
         // Exponential penalty based on failure count in 30-day window
         // Formula: base * (1.5 ^ (count - 1)) for each additional failure
         if (failureCount > 1) {
-            val exponentialFactor = Math.pow(1.5, (failureCount - 1).toDouble())
+            val exponentialFactor = 1.5.pow(failureCount - 1)
             penalty = FAILURE_BASE_PENALTY * exponentialFactor
         }
         

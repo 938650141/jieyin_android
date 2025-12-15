@@ -7,6 +7,7 @@ import com.jieyin.addiction.model.ScoreLevel
 import org.junit.Assert.*
 import org.junit.Before
 import org.junit.Test
+import kotlin.math.abs
 
 class AddictionScoreCalculatorTest {
     
@@ -390,7 +391,7 @@ class AddictionScoreCalculatorTest {
         
         // Old failure (35 days ago) should have minimal impact on current failure penalty
         // The difference should be small since old failure is outside 30-day window
-        val difference = kotlin.math.abs(scoreChangeWithOld - scoreChangeAlone)
+        val difference = abs(scoreChangeWithOld - scoreChangeAlone)
         assertTrue("Failures older than 30 days should have minimal impact", difference < 0.5)
     }
 }

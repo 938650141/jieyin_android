@@ -48,7 +48,7 @@ class MainActivity : AppCompatActivity() {
         findViewById<Button>(R.id.btnFailure).setOnClickListener { addFailureRecord() }
         findViewById<Button>(R.id.btnExercise).setOnClickListener { showExerciseConfirmDialog() }
         findViewById<Button>(R.id.btnSleep).setOnClickListener { showSleepScoreDialog() }
-        findViewById<Button>(R.id.btnClearData).setOnClickListener { clearAllData() }
+        findViewById<Button>(R.id.btnMoreRecords).setOnClickListener { showAllRecordsDialog() }
         
         // Update display
         updateDisplay()
@@ -158,16 +158,76 @@ class MainActivity : AppCompatActivity() {
         }
     }
     
-    private fun clearAllData() {
-        AlertDialog.Builder(this)
-            .setTitle("确认")
-            .setMessage("确定要清空所有数据吗？")
-            .setPositiveButton("确定") { _, _ ->
-                storage.clearAllRecords()
-                updateDisplay()
+    /**
+     * 显示所有记录对话框（只读，不允许修改或删除）
+     */
+    private fun showAllRecordsDialog() {
+        val records = storage.getAllRecords()
+        
+        if (records.isEmpty()) {
+            Toast.makeText(this, "暂无记录", Toast.LENGTH_SHORT).show()
+            return
+        }
+        
+        val dialogView = LayoutInflater.from(this).inflate(R.layout.dialog_all_records, null)
+        val container = dialogView.findViewById<LinearLayout>(R.id.allRecordsContainer)
+        val dateFormat = SimpleDateFormat("MM-dd HH:mm", Locale.getDefault())
+        
+        // Show all records sorted by timestamp descending
+        records.sortedByDescending { it.timestamp }
+            .forEach { record ->
+                val recordView = createReadOnlyRecordView(record, dateFormat)
+                container.addView(recordView)
             }
-            .setNegativeButton("取消", null)
+        
+        AlertDialog.Builder(this)
+            .setTitle("所有记录")
+            .setView(dialogView)
+            .setPositiveButton("关闭", null)
             .show()
+    }
+    
+    /**
+     * 创建只读记录视图（不含修改和删除按钮）
+     */
+    private fun createReadOnlyRecordView(record: ActivityRecord, dateFormat: SimpleDateFormat): View {
+        val container = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            setPadding(0, 8, 0, 8)
+            layoutParams = LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT,
+                LinearLayout.LayoutParams.WRAP_CONTENT
+            )
+        }
+        
+        val date = dateFormat.format(Date(record.timestamp))
+        val (typeName, emoji) = when(record.type) {
+            ActivityType.SUCCESS -> Pair("成功", "✅")
+            ActivityType.FAILURE -> Pair("失败", "❌")
+            ActivityType.EXERCISE -> Pair("运动", "🏃")
+            ActivityType.SLEEP -> Pair("睡眠 ${record.duration}分", "😴")
+        }
+        
+        // 显示加分/扣分情况
+        val scoreChangeText = when {
+            record.scoreChange > 0 -> "+${String.format("%.2f", record.scoreChange)}"
+            record.scoreChange < 0 -> String.format("%.2f", record.scoreChange)
+            else -> "0"
+        }
+        
+        // 记录信息文本
+        val infoText = TextView(this).apply {
+            text = "$emoji $date $typeName [$scoreChangeText]"
+            textSize = 14f
+            layoutParams = LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT,
+                LinearLayout.LayoutParams.WRAP_CONTENT
+            )
+        }
+        
+        container.addView(infoText)
+        
+        return container
     }
     
     private fun updateDisplay() {

@@ -3,7 +3,7 @@
     <string name="app_name">戒瘾助手</string>
     <string name="score_label">当前评分</string>
     <string name="history_label">最近记录</string>
-    <string name="btn_clear_data">清空数据</string>
+    <string name="btn_more_records">更多记录</string>
     <string name="level_light_addiction">轻度成瘾</string>
     <string name="default_score">60.00</string>
 </resources>
